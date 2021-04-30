@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 
 import torch as T
 from torch import nn
+from torch import jit
 from torch.nn import functional as F
 
 from torch import Tensor
@@ -40,7 +41,7 @@ class IRecurrentCellBuilder(ABC):
         pass
 
     def make_scripted(self, *p, **ks) -> IRecurrentCell:
-        return T.jit.script(self.make(*p, **ks))
+        return jit.script(self.make(*p, **ks))
 
 class RecurrentLayer(nn.Module):
     def reorder_inputs(self, inputs: Union[List[T.Tensor], T.Tensor]):
@@ -62,7 +63,7 @@ class RecurrentLayer(nn.Module):
         self.direction = direction
         self.cell_: IRecurrentCell = cell
 
-    @T.jit.ignore
+    @jit.ignore
     def forward(self, input, state_t0, return_state=None):
         if self.batch_first[0]:
         #^ input : [b t i]
@@ -86,7 +87,7 @@ class RecurrentLayer(nn.Module):
 
         if self.batch_first[1]:
             sequence = sequence.transpose(1, 0)
-        #^ sequence : [b t h]  
+        #^ sequence : [b t h]
 
         if return_state:
             return sequence, state
@@ -117,7 +118,7 @@ class BidirectionalRecurrentLayer(nn.Module):
             batch_first=batch_first
         )
 
-    @T.jit.ignore
+    @jit.ignore
     def forward(self, input, state_t0, is_last):
         return_states = is_last and self.return_states
         if return_states:
