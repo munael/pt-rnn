@@ -198,3 +198,52 @@ class RecurrentLayerStack(nn.Module):
         if self.return_states:
             return input, state  
         return input 
+
+class BasicRecurrentLayerStack(nn.Module):
+    def __init__(
+            self,
+            cell_builder  : IRecurrentCellBuilder,
+            input_size    : int,
+            num_layers    : int,
+            *,
+            batch_first   : bool = False,
+            scripted      : bool = True,
+            return_states : bool = False,
+    ):
+        '''
+        '''
+        super().__init__()
+        self._cell_builder = cell_builder
+
+        Dh = cell_builder.hidden_size
+        def make(in_size: int):
+            cell = cell_builder.make_scripted(in_size)
+            return RecurrentLayer(cell, 'forward', batch_first=batch_first)
+
+        rnns = [make(input_size)]
+        if num_layers > 1:
+            rnns += [make(Dh) for _ in range(num_layers - 1)]
+
+        self.rnn = nn.Sequential(*rnns)
+
+        self.input_size = input_size
+        self.hidden_size = self._cell_builder.hidden_size
+        self.num_layers = num_layers
+        self.return_states = return_states
+
+    def __repr__(self):
+        args = ', '.join([
+            f'in={self.input_size}',
+            f'hid={self.hidden_size}',
+            f'layers={self.num_layers}',
+        ])
+        return f'${self.__class__.__name__}({args}; {self._cell_builder})'
+
+    def forward(self, input, state_t0=None):
+        X = input
+        for layer_idx, rnn in enumerate(self.rnn):
+            is_last = (layer_idx == (len(self.rnn) - 1))
+            X, state = rnn(X, state_t0, is_last) 
+        if self.return_states:
+            return X, state
+        return X

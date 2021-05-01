@@ -19,7 +19,7 @@ from torch.nn import functional as F
 
 from torch import Tensor
 
-from .rnn_base import (
+from ..rnn_base import (
     IRecurrentCell,
     IRecurrentCellBuilder,
     RecurrentLayer,

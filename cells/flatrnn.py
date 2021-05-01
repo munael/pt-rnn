@@ -20,17 +20,17 @@ from torch.nn import functional as F
 
 from torch import Tensor
 
-from .rnn_base import (
+from ..rnn_base import (
     IRecurrentCell,
     IRecurrentCellBuilder,
     RecurrentLayer,
-    # RecurrentLayerStack,
+    BasicRecurrentLayerStack,
 )
 import utils as uu
 
 __all__ = [
-    'IndRNN',
-    'IndRNN_Cell'
+    'FlatRNN',
+    'FlatRNN_Cell'
 ]
 
 ACTIVATIONS: Dict[str, nn.Module] = {
@@ -40,14 +40,8 @@ ACTIVATIONS: Dict[str, nn.Module] = {
     'relu': nn.ReLU(),
 }
 
-class GateSpans(NamedTuple):
-    I: T.Tensor
-    F: T.Tensor
-    G: T.Tensor
-    O: T.Tensor
-
 @dataclass
-class IndRNN_Cell_Builder(IRecurrentCellBuilder):
+class FlatRNN_Cell_Builder(IRecurrentCellBuilder):
     hidden_size : int
     activation  : Union[str, nn.Module] = 'relu'
 
@@ -57,9 +51,9 @@ class IndRNN_Cell_Builder(IRecurrentCellBuilder):
     input_kernel_initialization : str = 'xavier_uniform'
 
     def make(self, input_size: int):
-        return IndRNN_Cell(input_size, self)
+        return FlatRNN_Cell(input_size, self)
 
-class IndRNN_Cell(IRecurrentCell):
+class FlatRNN_Cell(IRecurrentCell):
     def __repr__(self):
         args = ', '.join([
             f'in: {self.Dx}',
@@ -72,7 +66,7 @@ class IndRNN_Cell(IRecurrentCell):
     def __init__(
             self,
             input_size: int,
-            args: IndRNN_Cell_Builder,
+            args: FlatRNN_Cell_Builder,
     ):
         super().__init__()
         self._args = args
@@ -183,56 +177,7 @@ class IndRNN_Cell(IRecurrentCell):
 
         return outs, state
 
-class RecurrentLayerStack(nn.Module):
-    def __init__(
-            self,
-            cell_builder  : IRecurrentCellBuilder,
-            input_size    : int,
-            num_layers    : int,
-            *,
-            batch_first   : bool = False,
-            scripted      : bool = True,
-            return_states : bool = False,
-    ):
-        '''
-        '''
-        super().__init__()
-        self._cell_builder = cell_builder
-
-        Dh = cell_builder.hidden_size
-        def make(in_size: int):
-            cell = cell_builder.make_scripted(in_size)
-            return RecurrentLayer(cell, 'forward', batch_first=batch_first)
-
-        rnns = [make(input_size)]
-        if num_layers > 1:
-            rnns += [make(Dh) for _ in range(num_layers - 1)]
-
-        self.rnn = nn.Sequential(*rnns)
-
-        self.input_size = input_size
-        self.hidden_size = self._cell_builder.hidden_size
-        self.num_layers = num_layers
-        self.return_states = return_states
-
-    def __repr__(self):
-        args = ', '.join([
-            f'in={self.input_size}',
-            f'hid={self.hidden_size}',
-            f'layers={self.num_layers}',
-        ])
-        return f'${self.__class__.__name__}({args}; {self._cell_builder})'
-
-    def forward(self, input, state_t0=None):
-        X = input
-        for layer_idx, rnn in enumerate(self.rnn):
-            is_last = (layer_idx == (len(self.rnn) - 1))
-            X, state = rnn(X, state_t0, is_last) 
-        if self.return_states:
-            return X, state
-        return X
-
-class IndRNN(RecurrentLayerStack):
+class FlatRNN(BasicRecurrentLayerStack):
     def __init__(
             self,
             input_size: int,
@@ -241,20 +186,24 @@ class IndRNN(RecurrentLayerStack):
             **kargs,
     ):
         '''
-        self.rnn = RecurrentLayerStack(
-            IndRNN_Cell_Builder(
-                hidden_size=256,
-                activation='relu',
-                vertical_dropout=0.0,
-                recurrent_dropout=0.0,
-            ),
-            in_size,
-            num_layers,
-            batch_first=True,
-            return_states=False,
-        )
+        From:
+            - https://arxiv.org/abs/1602.02218 "Strongly-Typed Recurrent Neural Networks" (Typed-Minimal RNN: T-MR)
+            - https://arxiv.org/abs/1910.06251 "Deep Independently Recurrent Neural Network (FlatRNN)"
+        Example:
+            self.rnn = RecurrentLayerStack(
+                FlatRNN_Cell_Builder(
+                    hidden_size=256,
+                    activation='relu',
+                    vertical_dropout=0.0,
+                    recurrent_dropout=0.0,
+                ),
+                in_size,
+                num_layers,
+                batch_first=True,
+                return_states=False,
+            )
         '''
-        builder = IndRNN_Cell_Builder
+        builder = FlatRNN_Cell_Builder
         super().__init__(
             builder(*args, **kargs),
             input_size,
