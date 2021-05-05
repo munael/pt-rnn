@@ -48,6 +48,9 @@ class FlatRNN_Cell_Builder(IRecurrentCellBuilder):
     vertical_dropout  : float = 0.0
     recurrent_dropout : float = 0.0
 
+    # enable_second_memory : bool = False
+    linear_recurrence : bool = False
+
     input_kernel_initialization : str = 'xavier_uniform'
 
     def make(self, input_size: int):
@@ -78,8 +81,8 @@ class FlatRNN_Cell(IRecurrentCell):
         self.input_kernel     = nn.Linear(self.Dx, self.Dh)
         ## END Parameters
 
-        self.recurrent_dropout_p    = args.recurrent_dropout or 0.0
-        self.vertical_dropout_p     = args.vertical_dropout or 0.0
+        self.recurrent_dropout_p = args.recurrent_dropout or 0.0
+        self.vertical_dropout_p  = args.vertical_dropout or 0.0
         
         self.recurrent_dropout = (
             nn.Dropout(self.recurrent_dropout_p) if self.recurrent_dropout_p > 0.0
@@ -142,19 +145,24 @@ class FlatRNN_Cell(IRecurrentCell):
             out = self.recurrent_kernel(h_tm1)
         return out
 
-    def forward(self, input, state):
-        # type: (Tensor, Tuple[Tensor]) -> Tuple[Tensor, Tuple[Tensor]]
+    def forward(
+            self, input: T.Tensor, state: Tuple[Tensor, Tensor]
+    ) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         #^ input : [b i]
         #^ state.h : [b h]
 
-        (h_tm1,) = state
+        (h_tm1, z_tm1) = state
 
         Xh = self.apply_input_kernel(input)
-        Hh = self.apply_recurrent_kernel(h_tm1)
+        if self._args.linear_recurrence:
+            Hh = self.apply_recurrent_kernel(z_tm1)
+        else:
+            Hh = self.apply_recurrent_kernel(h_tm1)
 
-        ht = self.activation(Xh + Hh)
+        zt = Xh + Hh
+        ht = self.activation(zt)
 
-        return ht, (ht,)
+        return ht, (ht, zt)
 
     @jit.export
     def loop(
@@ -182,7 +190,6 @@ class FlatRNN(BasicRecurrentLayerStack):
             self,
             input_size: int,
             num_layers: int,
-            *args,
             **kargs,
     ):
         '''
@@ -205,7 +212,7 @@ class FlatRNN(BasicRecurrentLayerStack):
         '''
         builder = FlatRNN_Cell_Builder
         super().__init__(
-            builder(*args, **kargs),
+            builder(**kargs),
             input_size,
             num_layers,
         )
