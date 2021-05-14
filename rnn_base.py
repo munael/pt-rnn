@@ -242,8 +242,7 @@ class BasicRecurrentLayerStack(nn.Module):
     def forward(self, input, state_t0=None):
         X = input
         for layer_idx, rnn in enumerate(self.rnn):
-            is_last = (layer_idx == (len(self.rnn) - 1))
-            X, state = rnn(X, state_t0, is_last) 
+            X, state = rnn(X, state_t0)
         if self.return_states:
             return X, state
         return X
