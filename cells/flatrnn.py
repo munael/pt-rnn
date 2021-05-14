@@ -26,7 +26,7 @@ from ..rnn_base import (
     RecurrentLayer,
     BasicRecurrentLayerStack,
 )
-import utils as uu
+from .. import utils as uu
 
 __all__ = [
     'FlatRNN',
