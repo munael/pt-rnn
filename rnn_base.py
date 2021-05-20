@@ -196,7 +196,7 @@ class RecurrentLayerStack(nn.Module):
             is_last = (layer_idx == (len(self.rnn) - 1))
             input, state = rnn(input, state_t0, is_last) 
         if self.return_states:
-            return input, state  
+            return input, state
         return input 
 
 class BasicRecurrentLayerStack(nn.Module):
@@ -217,7 +217,10 @@ class BasicRecurrentLayerStack(nn.Module):
 
         Dh = cell_builder.hidden_size
         def make(in_size: int):
-            cell = cell_builder.make_scripted(in_size)
+            if scripted:
+                cell = cell_builder.make_scripted(in_size)
+            else:
+                cell = cell_builder.make(in_size)
             return RecurrentLayer(cell, 'forward', batch_first=batch_first)
 
         rnns = [make(input_size)]

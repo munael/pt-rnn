@@ -77,8 +77,8 @@ class FlatRNN_Cell(IRecurrentCell):
         self.Dh = args.hidden_size
 
         ## Parameters
-        self.recurrent_kernel = uu.Multiply(self.Dh, self.Dh, bias=False)
-        self.input_kernel     = nn.Linear(self.Dx, self.Dh)
+        self.recurrent_kernel = uu.Multiply(self.Dh, bias=False)
+        self.input_kernel     = nn.Linear(self.Dx, self.Dh, bias=True)
         ## END Parameters
 
         self.recurrent_dropout_p = args.recurrent_dropout or 0.0
@@ -215,4 +215,6 @@ class FlatRNN(BasicRecurrentLayerStack):
             builder(**kargs),
             input_size,
             num_layers,
+            return_states=True,
+            scripted=False,
         )
